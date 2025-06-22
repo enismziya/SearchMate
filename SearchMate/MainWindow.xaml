@@ -23,22 +23,27 @@
             </TextBlock>
 
             <Grid Margin="0 0 0 5">
-                <TextBox Name="SearchBox"
+                <TextBox x:Name="SearchBox"
                          FontSize="16"
                          Padding="10"
                          Background="White"
                          BorderBrush="#CCC"
                          BorderThickness="1"
                          TextChanged="SearchBox_TextChanged"/>
-                <TextBlock Name="PlaceholderText"
+                <TextBlock x:Name="PlaceholderText"
                            Text="Enter filename..."
                            FontSize="16"
                            Padding="15,11,10,10"
                            Foreground="DarkGray"
                            IsHitTestVisible="False"/>
             </Grid>
+            <ProgressBar x:Name="LoadingBar"
+                         Height="8"
+                         Margin="0 0 0 10"
+                         IsIndeterminate="True"
+                         Visibility="Collapsed"/>
 
-            <ListBox Name="ResultsList"
+            <ListBox x:Name="ResultsList"
                      FontSize="14"
                      BorderBrush="#CCC"
                      BorderThickness="1"
