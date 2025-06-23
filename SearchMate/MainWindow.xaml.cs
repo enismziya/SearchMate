@@ -51,13 +51,16 @@ namespace SearchMate
 
         private List<string> FindFiles(string searchText)
         {
-            if (string.IsNullOrWhiteSpace(searchText) || searchText.Length < 3)
+            if (string.IsNullOrWhiteSpace(searchText) || searchText.Length < 2)
                 return new List<string>();
 
             if (SearchCache.TryLoad(searchText, out var cached))
             {
                 Console.WriteLine("\uD83D\uDD04 Cache'ten alındı.");
-                return cached;
+                cached = cached.Where(File.Exists).ToList();
+
+                if (cached.Count > 0)
+                    return cached;
             }
 
             var found = new ConcurrentBag<string>();
@@ -106,10 +109,24 @@ namespace SearchMate
 
         private void ResultsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (ResultsList.SelectedItem is string filePath && File.Exists(filePath))
+            if (ResultsList.SelectedItem is string filePath)
             {
-                var argument = $"/select,\"{filePath}\"";
-                System.Diagnostics.Process.Start("explorer.exe", argument);
+                if (File.Exists(filePath))
+                {
+                    var argument = $"/select,\"{filePath}\"";
+                    System.Diagnostics.Process.Start("explorer.exe", argument);
+                }
+                else
+                {
+                    MessageBox.Show("Bu dosya artık mevcut değil.", "Dosya Silinmiş", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    string currentSearch = _pendingSearchText;
+                    if (!string.IsNullOrWhiteSpace(currentSearch))
+                    {
+                        SearchCache.RemoveFromCache(currentSearch, filePath);
+                        var updatedResults = ((List<string>)ResultsList.ItemsSource).Where(f => f != filePath).ToList();
+                        ResultsList.ItemsSource = updatedResults;
+                    }
+                }
             }
         }
     }
@@ -117,6 +134,8 @@ namespace SearchMate
     public static class SearchCache
     {
         private static readonly string cacheFolder = "cache";
+        private const int MaxCacheFiles = 100;
+        private static readonly TimeSpan ExpirationTime = TimeSpan.FromDays(30);
 
         static SearchCache()
         {
@@ -131,6 +150,7 @@ namespace SearchMate
 
             if (File.Exists(path))
             {
+                File.SetLastWriteTime(path, DateTime.Now);
                 try
                 {
                     string json = File.ReadAllText(path);
@@ -147,6 +167,8 @@ namespace SearchMate
             if (results == null || results.Count == 0)
                 return;
 
+            CleanupOldCacheFiles();
+
             string path = GetCacheFilePath(searchText);
             try
             {
@@ -154,6 +176,49 @@ namespace SearchMate
                 File.WriteAllText(path, json);
             }
             catch { }
+        }
+
+        public static void RemoveFromCache(string searchText, string filePathToRemove)
+        {
+            string path = GetCacheFilePath(searchText);
+            if (!File.Exists(path)) return;
+
+            try
+            {
+                var json = File.ReadAllText(path);
+                var list = JsonSerializer.Deserialize<List<string>>(json);
+                if (list == null) return;
+
+                list.RemoveAll(f => f == filePathToRemove);
+                File.WriteAllText(path, JsonSerializer.Serialize(list));
+            }
+            catch { }
+        }
+
+        private static void CleanupOldCacheFiles()
+        {
+            var files = Directory.GetFiles(cacheFolder, "*.json")
+                .Select(path => new FileInfo(path))
+                .OrderBy(f => f.LastWriteTime)
+                .ToList();
+
+            foreach (var file in files)
+            {
+                if (DateTime.Now - file.LastWriteTime > ExpirationTime)
+                {
+                    try { file.Delete(); } catch { }
+                }
+            }
+
+            while (files.Count > MaxCacheFiles)
+            {
+                try
+                {
+                    files[0].Delete();
+                    files.RemoveAt(0);
+                }
+                catch { break; }
+            }
         }
 
         private static string GetCacheFilePath(string searchText)
