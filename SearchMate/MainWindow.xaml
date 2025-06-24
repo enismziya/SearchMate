@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="SearchMate" Height="800" Width="500" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
-        Background="#F7F8FA">
+        Background="{DynamicResource WindowBackgroundBrush}" Icon="/icon.png">
 
     <Grid Margin="0">
         <Grid.RowDefinitions>
@@ -16,7 +16,7 @@
         <DockPanel Grid.Row="0" Margin="20 20 20 0">
             <TextBlock Text="🔍 SearchMate"
                        FontSize="32"
-                       Foreground="#222"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
                        FontWeight="Bold"
                        VerticalAlignment="Center"
                        DockPanel.Dock="Left"/>
@@ -24,8 +24,8 @@
                     Content="⚙️"
                     Width="38" Height="38"
                     FontSize="20"
-                    Background="#FFF"
-                    BorderBrush="#E0E0E0"
+                    Background="{DynamicResource ControlBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1"
                     Margin="0 0 0 0"
                     HorizontalAlignment="Right"
@@ -41,19 +41,20 @@
         </DockPanel>
 
         <Grid Margin="20 10 20 5" Grid.Row="1">
-            <Border CornerRadius="12" Background="#FFF" BorderBrush="#E0E0E0" BorderThickness="1"  >
+            <Border CornerRadius="12" Background="{DynamicResource ControlBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"  >
                 <Grid>
                     <TextBox x:Name="SearchBox"
                              FontSize="16"
                              Padding="12"
                              Background="Transparent"
                              BorderThickness="0"
+                             Foreground="{DynamicResource PrimaryTextBrush}"
                              TextChanged="SearchBox_TextChanged"/>
                     <TextBlock x:Name="PlaceholderText"
                                Text="Enter filename..."
                                FontSize="16"
                                Padding="16,12,10,10"
-                               Foreground="#B0B0B0"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
                                IsHitTestVisible="False"
                                Visibility="Visible"/>
                 </Grid>
@@ -66,14 +67,15 @@
                      IsIndeterminate="True"
                      Visibility="Collapsed"
                      Grid.Row="2"
-                     Background="#F0F0F0"
-                     Foreground="#4F8EF7"/>
+                     Background="{DynamicResource BorderBrush}"
+                     Foreground="{DynamicResource AccentBrush}"/>
 
-        <Border Grid.Row="3" Margin="20 0 20 20" CornerRadius="12" Background="#FFF" BorderBrush="#E0E0E0" BorderThickness="1">
+        <Border Grid.Row="3" Margin="20 0 20 20" CornerRadius="12" Background="{DynamicResource ControlBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
             <ListBox x:Name="ResultsList"
                      FontSize="14"
                      BorderThickness="0"
                      Background="Transparent"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
                      MouseDoubleClick="ResultsList_MouseDoubleClick"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                      HorizontalContentAlignment="Left">
@@ -82,7 +84,7 @@
                 </ListBox.Effect>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" TextWrapping="NoWrap"/>
+                        <TextBlock Text="{Binding}" TextWrapping="NoWrap" Foreground="{DynamicResource PrimaryTextBrush}"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

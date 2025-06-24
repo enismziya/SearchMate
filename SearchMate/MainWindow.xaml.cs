@@ -21,6 +21,7 @@ namespace SearchMate
         {
             LoadSettings();
             InitializeComponent();
+            ApplyTheme(_settings.IsDarkTheme);
             _searchDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _searchDelayTimer.Tick += SearchDelayTimer_Tick;
             ApplySettings();
@@ -173,13 +174,15 @@ namespace SearchMate
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
             bool wasCacheEnabled = _settings.EnableCache;
+            bool wasDarkTheme = _settings.IsDarkTheme;
 
             var settingsWindow = new SettingsWindow(
                 _settings.MaxSearchResult,
                 _settings.MaxCacheFiles > 0 ? _settings.MaxCacheFiles : 100,
                 _settings.ExpirationTimeDays > 0 ? _settings.ExpirationTimeDays : 30,
                 _settings.EnableCache,
-                _settings.AutoCleanCache);
+                _settings.AutoCleanCache,
+                _settings.IsDarkTheme);
             settingsWindow.Owner = this;
             if (settingsWindow.ShowDialog() == true)
             {
@@ -188,15 +191,30 @@ namespace SearchMate
                 _settings.ExpirationTimeDays = settingsWindow.ExpirationTimeDays;
                 _settings.EnableCache = settingsWindow.EnableCache;
                 _settings.AutoCleanCache = settingsWindow.AutoCleanCache;
+                _settings.IsDarkTheme = settingsWindow.IsDarkTheme;
 
                 if (wasCacheEnabled && !_settings.EnableCache)
                 {
                     SearchCache.ClearAll();
                 }
-
                 SaveSettings();
                 ApplySettings();
+                if (wasDarkTheme != _settings.IsDarkTheme)
+                {
+                    ApplyTheme(_settings.IsDarkTheme);
+                }
             }
+        }
+
+        private void ApplyTheme(bool isDark)
+        {
+            var app = Application.Current;
+            if (app == null) return;
+            var dicts = app.Resources.MergedDictionaries;
+            dicts.Clear();
+            var themeDict = new ResourceDictionary();
+            themeDict.Source = new System.Uri(isDark ? "DarkThemeResources.xaml" : "LightThemeResources.xaml", System.UriKind.Relative);
+            dicts.Add(themeDict);
         }
     }
 
@@ -318,5 +336,6 @@ namespace SearchMate
         public int ExpirationTimeDays { get; set; } = 30;
         public bool EnableCache { get; set; } = true;
         public bool AutoCleanCache { get; set; } = true;
+        public bool IsDarkTheme { get; set; } = false;
     }
 }

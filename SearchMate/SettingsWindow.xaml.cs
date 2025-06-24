@@ -11,12 +11,14 @@ namespace SearchMate
         public int ExpirationTimeDays { get; set; }
         public bool EnableCache { get; set; }
         public bool AutoCleanCache { get; set; }
+        public bool IsDarkTheme { get; set; }
 
         private readonly int[] allowedResults = { 500, 1000, 2000, 5000 };
 
-        public SettingsWindow(int maxSearchResult, int maxCacheFiles, int expirationTimeDays, bool enableCache = true, bool autoCleanCache = true)
+        public SettingsWindow(int maxSearchResult, int maxCacheFiles, int expirationTimeDays, bool enableCache = true, bool autoCleanCache = true, bool isDarkTheme = false)
         {
             InitializeComponent();
+            ApplyTheme(isDarkTheme);
             int idx = 0;
             for (int i = 0; i < allowedResults.Length; i++)
                 if (allowedResults[i] == maxSearchResult) idx = i;
@@ -27,6 +29,18 @@ namespace SearchMate
             AutoCleanCacheBox.IsChecked = autoCleanCache;
             SetCacheFieldsEnabled(enableCache);
             SetExpirationEnabled(enableCache && autoCleanCache);
+            DarkThemeBox.IsChecked = isDarkTheme;
+        }
+
+        private void ApplyTheme(bool isDark)
+        {
+            var app = Application.Current;
+            if (app == null) return;
+            var dicts = app.Resources.MergedDictionaries;
+            dicts.Clear();
+            var themeDict = new ResourceDictionary();
+            themeDict.Source = new System.Uri(isDark ? "DarkThemeResources.xaml" : "LightThemeResources.xaml", System.UriKind.Relative);
+            dicts.Add(themeDict);
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
@@ -64,6 +78,7 @@ namespace SearchMate
                 ExpirationTimeDays = expDays;
                 EnableCache = EnableCacheBox.IsChecked == true;
                 AutoCleanCache = AutoCleanCacheBox.IsChecked == true;
+                IsDarkTheme = DarkThemeBox.IsChecked == true;
                 DialogResult = true;
             }
             else
