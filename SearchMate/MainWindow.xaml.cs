@@ -10,35 +10,72 @@ namespace SearchMate
 {
     public partial class MainWindow : Window
     {
-        public int maxSearchResult = 1000;
+        private const string SettingsFile = "settings.json";
+        private SettingsData _settings = null!;
+        private readonly DispatcherTimer _searchDelayTimer;
+        private string _pendingSearchText = string.Empty;
+        public int maxSearchResult;
 
         public MainWindow()
         {
+            LoadSettings();
             InitializeComponent();
             _searchDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _searchDelayTimer.Tick += SearchDelayTimer_Tick;
+            ApplySettings();
         }
 
-        private readonly DispatcherTimer _searchDelayTimer;
-        private string _pendingSearchText = string.Empty;
-
-        private async void SearchDelayTimer_Tick(object sender, EventArgs e)
+        private void LoadSettings()
         {
-            _searchDelayTimer.Stop();
-            await SearchFilesAsync(_pendingSearchText);
+            if (File.Exists(SettingsFile))
+            {
+                try
+                {
+                    var json = File.ReadAllText(SettingsFile);
+                    _settings = JsonSerializer.Deserialize<SettingsData>(json) ?? new SettingsData();
+                }
+                catch { _settings = new SettingsData(); }
+            }
+            else
+            {
+                _settings = new SettingsData();
+            }
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(SettingsFile, json);
+            }
+            catch { }
+        }
+
+        private void ApplySettings()
+        {
+            maxSearchResult = _settings.MaxSearchResult;
+            SearchCache.MaxCacheFiles = _settings.MaxCacheFiles;
+            SearchCache.ExpirationTime = _settings.AutoCleanCache ? TimeSpan.FromDays(_settings.ExpirationTimeDays) : TimeSpan.Zero;
         }
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             PlaceholderText.Visibility = string.IsNullOrEmpty(SearchBox.Text)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             _pendingSearchText = SearchBox.Text;
             _searchDelayTimer.Stop();
             if (!string.IsNullOrWhiteSpace(_pendingSearchText))
                 _searchDelayTimer.Start();
             else
                 ResultsList.ItemsSource = null;
+        }
+
+        private async void SearchDelayTimer_Tick(object? sender, EventArgs e)
+        {
+            _searchDelayTimer.Stop();
+            await SearchFilesAsync(_pendingSearchText);
         }
 
         private async Task SearchFilesAsync(string searchText)
@@ -53,14 +90,12 @@ namespace SearchMate
 
         private List<string> FindFiles(string searchText)
         {
-            if (string.IsNullOrWhiteSpace(searchText) || searchText.Length < 2)
+            if (string.IsNullOrWhiteSpace(searchText))
                 return new List<string>();
 
-            if (SearchCache.TryLoad(searchText, out var cached))
+            if (searchText.Length >= 3 && _settings.EnableCache && SearchCache.TryLoad(searchText, out var cached))
             {
-                Console.WriteLine("\uD83D\uDD04 Cache'ten alındı.");
                 cached = cached.Where(File.Exists).ToList();
-
                 if (cached.Count > 0)
                     return cached;
             }
@@ -70,11 +105,7 @@ namespace SearchMate
 
             Parallel.ForEach(drives, drive =>
             {
-                try
-                {
-                    RecursiveSearch(drive.RootDirectory.FullName, searchText, found, maxSearchResult);
-                }
-                catch { }
+                try { RecursiveSearch(drive.RootDirectory.FullName, searchText, found, maxSearchResult); } catch { }
             });
 
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
@@ -82,7 +113,7 @@ namespace SearchMate
 
             var resultList = found.Distinct().ToList();
 
-            if (resultList.Count > 0)
+            if (resultList.Count > 0 && searchText.Length >= 3 && _settings.EnableCache)
                 SearchCache.Save(searchText, resultList);
 
             return resultList;
@@ -91,7 +122,6 @@ namespace SearchMate
         private void RecursiveSearch(string directory, string searchText, ConcurrentBag<string> found, int maxResults)
         {
             if (found.Count >= maxResults) return;
-
             try
             {
                 foreach (var file in Directory.EnumerateFiles(directory, "*" + searchText + "*"))
@@ -99,7 +129,6 @@ namespace SearchMate
                     found.Add(file);
                     if (found.Count >= maxResults) return;
                 }
-
                 Parallel.ForEach(Directory.EnumerateDirectories(directory), dir =>
                 {
                     if (found.Count < maxResults)
@@ -120,7 +149,7 @@ namespace SearchMate
                 }
                 else
                 {
-                    MessageBox.Show("Bu dosya artık mevcut değil.", "Dosya Silinmiş", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("This file is no longer exist.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                     string currentSearch = _pendingSearchText;
                     if (!string.IsNullOrWhiteSpace(currentSearch))
                     {
@@ -134,15 +163,39 @@ namespace SearchMate
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("SettingsPanel", "Settings", MessageBoxButton.OK, MessageBoxImage.Information);
+            bool wasCacheEnabled = _settings.EnableCache;
+
+            var settingsWindow = new SettingsWindow(
+                _settings.MaxSearchResult,
+                _settings.MaxCacheFiles > 0 ? _settings.MaxCacheFiles : 100,
+                _settings.ExpirationTimeDays > 0 ? _settings.ExpirationTimeDays : 30,
+                _settings.EnableCache,
+                _settings.AutoCleanCache);
+            settingsWindow.Owner = this;
+            if (settingsWindow.ShowDialog() == true)
+            {
+                _settings.MaxSearchResult = settingsWindow.MaxSearchResult;
+                _settings.MaxCacheFiles = settingsWindow.MaxCacheFiles;
+                _settings.ExpirationTimeDays = settingsWindow.ExpirationTimeDays;
+                _settings.EnableCache = settingsWindow.EnableCache;
+                _settings.AutoCleanCache = settingsWindow.AutoCleanCache;
+
+                if (wasCacheEnabled && !_settings.EnableCache)
+                {
+                    SearchCache.ClearAll();
+                }
+
+                SaveSettings();
+                ApplySettings();
+            }
         }
     }
 
     public static class SearchCache
     {
         private static readonly string cacheFolder = "cache";
-        private const int MaxCacheFiles = 100;
-        private static readonly TimeSpan ExpirationTime = TimeSpan.FromDays(30);
+        public static int MaxCacheFiles = 100;
+        public static TimeSpan ExpirationTime = TimeSpan.FromDays(30);
 
         static SearchCache()
         {
@@ -154,7 +207,6 @@ namespace SearchMate
         {
             results = null;
             string path = GetCacheFilePath(searchText);
-
             if (File.Exists(path))
             {
                 File.SetLastWriteTime(path, DateTime.Now);
@@ -173,9 +225,7 @@ namespace SearchMate
         {
             if (results == null || results.Count == 0)
                 return;
-
             CleanupOldCacheFiles();
-
             string path = GetCacheFilePath(searchText);
             try
             {
@@ -189,15 +239,28 @@ namespace SearchMate
         {
             string path = GetCacheFilePath(searchText);
             if (!File.Exists(path)) return;
-
             try
             {
                 var json = File.ReadAllText(path);
                 var list = JsonSerializer.Deserialize<List<string>>(json);
                 if (list == null) return;
-
                 list.RemoveAll(f => f == filePathToRemove);
                 File.WriteAllText(path, JsonSerializer.Serialize(list));
+            }
+            catch { }
+        }
+
+        public static void ClearAll()
+        {
+            try
+            {
+                if (Directory.Exists(cacheFolder))
+                {
+                    foreach (var file in Directory.GetFiles(cacheFolder, "*.json"))
+                    {
+                        File.Delete(file);
+                    }
+                }
             }
             catch { }
         }
@@ -208,23 +271,27 @@ namespace SearchMate
                 .Select(path => new FileInfo(path))
                 .OrderBy(f => f.LastWriteTime)
                 .ToList();
-
-            foreach (var file in files)
+            if (ExpirationTime > TimeSpan.Zero)
             {
-                if (DateTime.Now - file.LastWriteTime > ExpirationTime)
+                foreach (var file in files)
                 {
-                    try { file.Delete(); } catch { }
+                    if (DateTime.Now - file.LastWriteTime > ExpirationTime)
+                    {
+                        try { file.Delete(); } catch { }
+                    }
                 }
             }
-
-            while (files.Count > MaxCacheFiles)
+            if (MaxCacheFiles > 0)
             {
-                try
+                while (files.Count >= MaxCacheFiles)
                 {
-                    files[0].Delete();
-                    files.RemoveAt(0);
+                    try
+                    {
+                        files[0].Delete();
+                        files.RemoveAt(0);
+                    }
+                    catch { break; }
                 }
-                catch { break; }
             }
         }
 
@@ -233,5 +300,14 @@ namespace SearchMate
             string fileName = searchText.ToLower().Replace(" ", "_") + ".json";
             return Path.Combine(cacheFolder, fileName);
         }
+    }
+
+    public class SettingsData
+    {
+        public int MaxSearchResult { get; set; } = 1000;
+        public int MaxCacheFiles { get; set; } = 100;
+        public int ExpirationTimeDays { get; set; } = 30;
+        public bool EnableCache { get; set; } = true;
+        public bool AutoCleanCache { get; set; } = true;
     }
 }
