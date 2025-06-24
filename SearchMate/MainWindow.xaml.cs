@@ -10,6 +10,8 @@ namespace SearchMate
 {
     public partial class MainWindow : Window
     {
+        public int maxSearchResult = 1000;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -70,13 +72,13 @@ namespace SearchMate
             {
                 try
                 {
-                    RecursiveSearch(drive.RootDirectory.FullName, searchText, found, 500);
+                    RecursiveSearch(drive.RootDirectory.FullName, searchText, found, maxSearchResult);
                 }
                 catch { }
             });
 
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            try { RecursiveSearch(desktopPath, searchText, found, 500); } catch { }
+            try { RecursiveSearch(desktopPath, searchText, found, maxSearchResult); } catch { }
 
             var resultList = found.Distinct().ToList();
 
@@ -128,6 +130,11 @@ namespace SearchMate
                     }
                 }
             }
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            MessageBox.Show("SettingsPanel", "Settings", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
