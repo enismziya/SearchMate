@@ -15,6 +15,7 @@ namespace SearchMate
         private readonly DispatcherTimer _searchDelayTimer;
         private string _pendingSearchText = string.Empty;
         public int maxSearchResult;
+        private CancellationTokenSource _searchCts;
 
         public MainWindow()
         {
@@ -75,15 +76,23 @@ namespace SearchMate
         private async void SearchDelayTimer_Tick(object? sender, EventArgs e)
         {
             _searchDelayTimer.Stop();
-            await SearchFilesAsync(_pendingSearchText);
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
+            try
+            {
+                await SearchFilesAsync(_pendingSearchText, token);
+            }
+            catch (OperationCanceledException){}
         }
 
-        private async Task SearchFilesAsync(string searchText)
+        private async Task SearchFilesAsync(string searchText, CancellationToken token)
         {
             LoadingBar.Visibility = Visibility.Visible;
             ResultsList.ItemsSource = null;
-            await Task.Delay(100);
-            var results = await Task.Run(() => FindFiles(searchText));
+            await Task.Delay(100, token);
+            var results = await Task.Run(() => FindFiles(searchText), token);
+            token.ThrowIfCancellationRequested();
             ResultsList.ItemsSource = results;
             LoadingBar.Visibility = Visibility.Collapsed;
         }
